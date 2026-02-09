@@ -1,0 +1,79 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-Debug-dbd92b6bd09236eee65e.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.14"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "application_proxy",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "application_proxy::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-application_proxy-Debug-d85e89a336f6c0c060c3.json",
+					"name" : "application_proxy",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "application_proxy_autogen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-application_proxy_autogen-Debug-509d0e0e93a871391384.json",
+					"name" : "application_proxy_autogen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "application_proxy_autogen_timestamp_deps::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-application_proxy_autogen_timestamp_deps-Debug-0cc5bcc50d1dd4a6e831.json",
+					"name" : "application_proxy_autogen_timestamp_deps",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/natalija/Desktop/mrkirm/application_proxy/build/Desktop-Debug",
+		"source" : "/home/natalija/Desktop/mrkirm/application_proxy"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 6
+	}
+}

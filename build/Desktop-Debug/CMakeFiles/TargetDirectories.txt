@@ -1,0 +1,9 @@
+/home/natalija/Desktop/mrkirm/application_proxy/build/Desktop-Debug/CMakeFiles/application_proxy.dir
+/home/natalija/Desktop/mrkirm/application_proxy/build/Desktop-Debug/CMakeFiles/edit_cache.dir
+/home/natalija/Desktop/mrkirm/application_proxy/build/Desktop-Debug/CMakeFiles/rebuild_cache.dir
+/home/natalija/Desktop/mrkirm/application_proxy/build/Desktop-Debug/CMakeFiles/list_install_components.dir
+/home/natalija/Desktop/mrkirm/application_proxy/build/Desktop-Debug/CMakeFiles/install.dir
+/home/natalija/Desktop/mrkirm/application_proxy/build/Desktop-Debug/CMakeFiles/install/local.dir
+/home/natalija/Desktop/mrkirm/application_proxy/build/Desktop-Debug/CMakeFiles/install/strip.dir
+/home/natalija/Desktop/mrkirm/application_proxy/build/Desktop-Debug/CMakeFiles/application_proxy_autogen_timestamp_deps.dir
+/home/natalija/Desktop/mrkirm/application_proxy/build/Desktop-Debug/CMakeFiles/application_proxy_autogen.dir
