@@ -1,18 +1,15 @@
 #ifndef PROXY_H
 #define PROXY_H
 
-#include <QObject>
 #include <QtNetwork/QTcpServer>
 #include <QtNetwork/QTcpSocket>
+#include <QObject>
 
 class Proxy : public QObject
 {
     Q_OBJECT
 public:
-    explicit Proxy(quint16 listenPort,
-                   const QString& serverHost,
-                   quint16 serverPort,
-                   QObject* parent = nullptr);
+    Proxy(quint16 listenPort, const QString& serverHost, quint16 serverPort, QObject* parent = nullptr);
 
 private slots:
     void onNewClientConnection();
@@ -22,18 +19,13 @@ private slots:
     void onServerDisconnected();
 
 private:
-    QTcpSocket* socket;
-    QString username;
-    QString password;
-
     QTcpServer* tcpServer;
     QTcpSocket* clientSocket;
     QTcpSocket* serverSocket;
 
     QString serverHost;
     quint16 serverPort;
-
-    bool clientAuthenticated = false;  // Dodato da ne bude undefined
+    bool clientAuthenticated = false;
 };
 
 #endif // PROXY_H

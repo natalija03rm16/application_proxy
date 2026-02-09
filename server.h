@@ -14,9 +14,11 @@ public:
 private slots:
     void onNewConnection();
     void onReadyRead();
+    void onDisconnected();
 
 private:
-    QTcpServer* tcpServer;
+    QTcpServer* server;
+    QTcpSocket* clientSocket;
 };
 
-#endif // SERVER_H
+#endif
