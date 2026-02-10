@@ -4,7 +4,7 @@
 #include <QDebug>
 
 Client::Client(const QString& proxyHost, quint16 proxyPort, QObject* parent)
-    : QObject(parent)
+    : QObject(parent), clientState(ClientState::Greeting)
 {
     QString username = QInputDialog::getText(nullptr, "Login", "Username:");
     QString password = QInputDialog::getText(nullptr, "Login", "Password:", QLineEdit::Password);
@@ -14,20 +14,30 @@ Client::Client(const QString& proxyHost, quint16 proxyPort, QObject* parent)
     connect(socket, &QTcpSocket::readyRead, this, &Client::onReadyRead);
     connect(socket, &QTcpSocket::disconnected, this, &Client::onDisconnected);
 
+    qDebug() << "[CLIENT] Connecting to proxy at" << proxyHost << ":" << proxyPort;
     socket->connectToHost(proxyHost, proxyPort);
-
-    // Poslati username i password nakon konekcije
-    connect(socket, &QTcpSocket::connected, [=]() {
-        QByteArray auth;
-        auth.append(username.toUtf8());
-        auth.append(':');
-        auth.append(password.toUtf8());
-        socket->write(auth);
-    });
 }
 
-void Client::onConnected() {
-    qDebug() << "Connected to proxy!";
+Client::~Client()
+{
+    if (socket) {
+        socket->disconnect();
+        socket->deleteLater();
+        socket = nullptr;
+    }
+}
+
+void Client::onConnected()
+{
+    qDebug() << "[CLIENT] Connected to proxy";
+
+    QByteArray greeting;
+    greeting.append(char(0x05)); // VER
+    greeting.append(char(0x01)); // NMETHODS
+    greeting.append(char(0x02)); // USERNAME/PASSWORD
+
+    qDebug() << "[CLIENT] Sending SOCKS5 Greeting: VER=0x05, NMETHODS=1, METHOD=0x02 (Username/Password)";
+    socket->write(greeting);
 }
 
 void Client::sendMessage(const QString& message) {
@@ -35,11 +45,94 @@ void Client::sendMessage(const QString& message) {
         socket->write(message.toUtf8());
 }
 
-void Client::onReadyRead() {
+void Client::onReadyRead()
+{
     QByteArray data = socket->readAll();
-    qDebug() << "Client received:" << data;
+
+    switch (clientState) {
+    case ClientState::Greeting: {
+        qDebug() << "[CLIENT] Received Greeting Response:" << data.size() << "bytes";
+
+        if (data.size() != 2 || data[1] != char(0x02)) {
+            qCritical() << "[CLIENT] SOCKS greeting rejected! VER=" << (quint8)data[0]
+                        << "METHOD=" << (quint8)data[1];
+            socket->disconnectFromHost();
+            return;
+        }
+
+        qDebug() << "[CLIENT] Greeting OK: VER=" << (quint8)data[0]
+                 << "METHOD=" << (quint8)data[1] << "(Username/Password selected)";
+
+        QByteArray auth;
+        QByteArray user = "user";
+        QByteArray pass = "pass";
+
+        auth.append(char(0x01));                // auth version
+        auth.append(char(user.size()));         // ULEN
+        auth.append(user);
+        auth.append(char(pass.size()));         // PLEN
+        auth.append(pass);
+
+        qDebug() << "[CLIENT] Sending Authentication: USERNAME=" << user << "PASSWORD=" << pass;
+        socket->write(auth);
+        clientState = ClientState::Auth;
+        break;
+    }
+
+    case ClientState::Auth: {
+        qDebug() << "[CLIENT] Received Auth Response:" << data.size() << "bytes";
+
+        if (data.size() != 2 || data[1] != char(0x00)) {
+            qCritical() << "[CLIENT] Authentication failed! STATUS=" << (quint8)data[1];
+            socket->disconnectFromHost();
+            return;
+        }
+
+        qDebug() << "[CLIENT] Authentication OK: VER=" << (quint8)data[0]
+                 << "STATUS=" << (quint8)data[1] << "(Success)";
+
+        QByteArray req;
+        req.append(char(0x05)); // VER
+        req.append(char(0x01)); // CMD = CONNECT
+        req.append(char(0x00)); // RSV
+        req.append(char(0x01)); // ATYP = IPv4
+
+        quint32 ip = QHostAddress("127.0.0.1").toIPv4Address();
+        req.append(char(ip >> 24));
+        req.append(char(ip >> 16));
+        req.append(char(ip >> 8));
+        req.append(char(ip));
+
+        req.append(char(0x1F)); // port 8080 (0x1F90)
+        req.append(char(0x90));
+
+        qDebug() << "[CLIENT] Sending CONNECT Request: DST.ADDR=127.0.0.1 DST.PORT=8080";
+        socket->write(req);
+        clientState = ClientState::Request;
+        break;
+    }
+
+    case ClientState::Request: {
+        qDebug() << "[CLIENT] Received CONNECT Response:" << data.size() << "bytes";
+
+        if (data.size() < 2 || data[1] != char(0x00)) {
+            qCritical() << "[CLIENT] CONNECT failed! REP=" << (quint8)data[1];
+            socket->disconnectFromHost();
+            return;
+        }
+
+        qDebug() << "[CLIENT] CONNECT OK: REP=" << (quint8)data[1] << "(Success)";
+        qDebug() << "[CLIENT] *** SOCKS5 tunnel established - Entering RELAY mode ***";
+        clientState = ClientState::Relay;
+        break;
+    }
+
+    case ClientState::Relay:
+        qDebug() << "[CLIENT] [RELAY] Received from server:" << data;
+        break;
+    }
 }
 
 void Client::onDisconnected() {
-    qDebug() << "Disconnected from proxy.";
+    qDebug() << "[CLIENT] Disconnected from proxy.";
 }

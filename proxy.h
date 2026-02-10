@@ -1,9 +1,15 @@
 #ifndef PROXY_H
 #define PROXY_H
-
 #include <QtNetwork/QTcpServer>
 #include <QtNetwork/QTcpSocket>
 #include <QObject>
+
+enum class ProxyState {
+    Greeting,
+    Auth,
+    Request,
+    Relay
+};
 
 class Proxy : public QObject
 {
@@ -22,10 +28,9 @@ private:
     QTcpServer* tcpServer;
     QTcpSocket* clientSocket;
     QTcpSocket* serverSocket;
-
     QString serverHost;
     quint16 serverPort;
-    bool clientAuthenticated = false;
+    ProxyState proxyState;
 };
 
 #endif // PROXY_H
