@@ -1,21 +1,31 @@
 #ifndef PROXY_H
 #define PROXY_H
+
 #include <QtNetwork/QTcpServer>
 #include <QtNetwork/QTcpSocket>
 #include <QObject>
+#include <QMap>
 
-enum class ProxyState {
+enum class ProxyState
+{
     Greeting,
     Auth,
     Request,
     Relay
 };
 
+struct ClientContext
+{
+    QTcpSocket* clientSocket;
+    QTcpSocket* serverSocket;
+    ProxyState state;
+};
+
 class Proxy : public QObject
 {
     Q_OBJECT
 public:
-    Proxy(quint16 listenPort, const QString& serverHost, quint16 serverPort, QObject* parent = nullptr);
+    Proxy(quint16 listenPort, QObject* parent = nullptr);
 
 private slots:
     void onNewClientConnection();
@@ -26,11 +36,10 @@ private slots:
 
 private:
     QTcpServer* tcpServer;
-    QTcpSocket* clientSocket;
-    QTcpSocket* serverSocket;
-    QString serverHost;
-    quint16 serverPort;
-    ProxyState proxyState;
+
+    QMap<QTcpSocket*, ClientContext> clients;
+
+    const int MAX_CLIENTS = 10;
 };
 
-#endif // PROXY_H
+#endif

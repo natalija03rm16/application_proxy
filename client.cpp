@@ -6,8 +6,7 @@
 #include <QFileInfo>
 #include <QFileDialog>
 
-Client::Client(const QString& proxyHost, quint16 proxyPort, QObject* parent)
-    : QObject(parent), clientState(ClientState::Greeting)
+Client::Client(const QString& proxyHost, quint16 proxyPort, QObject* parent) : QObject(parent), clientState(ClientState::Greeting)
 {
     QString username = QInputDialog::getText(nullptr, "Login", "Username:");
     QString password = QInputDialog::getText(nullptr, "Login", "Password:", QLineEdit::Password);
@@ -23,7 +22,8 @@ Client::Client(const QString& proxyHost, quint16 proxyPort, QObject* parent)
 
 Client::~Client()
 {
-    if (socket) {
+    if (socket)
+    {
         socket->disconnect();
         socket->deleteLater();
         socket = nullptr;
@@ -45,12 +45,13 @@ void Client::onConnected()
 
 void Client::sendMessage(const QString& message)
 {
-    if (!socket || socket->state() != QTcpSocket::ConnectedState) {
+    if (!socket || socket->state() != QTcpSocket::ConnectedState)
+    {
         qCritical() << "[CLIENT] Cannot send message: not connected";
         return;
     }
 
-    // Protokol: MSG|<len>|<message>
+    // MSG|<len>|<message>
     QByteArray packet;
     packet.append("MSG|");
 
@@ -66,15 +67,18 @@ void Client::sendMessage(const QString& message)
 
 void Client::askAndSendFile()
 {
-    while (true) {
+    while (true)
+    {
         QString filePath = QInputDialog::getText(nullptr, "Send File", "Enter path to file (or leave empty to quit):");
-        if (filePath.isEmpty()) {
+        if (filePath.isEmpty())
+        {
             qDebug() << "[CLIENT] No file entered. You can continue sending messages or files later.";
             break;
         }
 
         QFile file(filePath);
-        if (!file.open(QIODevice::ReadOnly)) {
+        if (!file.open(QIODevice::ReadOnly))
+        {
             qCritical() << "[CLIENT] Cannot open file:" << filePath;
             continue;
         }
@@ -102,19 +106,20 @@ void Client::onReadyRead()
 {
     QByteArray data = socket->readAll();
 
-    switch (clientState) {
-    case ClientState::Greeting: {
+    switch (clientState)
+    {
+    case ClientState::Greeting:
+    {
         qDebug() << "[CLIENT] Received Greeting Response:" << data.size() << "bytes";
 
-        if (data.size() != 2 || data[1] != char(0x02)) {
-            qCritical() << "[CLIENT] SOCKS greeting rejected! VER=" << (quint8)data[0]
-                        << "METHOD=" << (quint8)data[1];
+        if (data.size() != 2 || data[1] != char(0x02))
+        {
+            qCritical() << "[CLIENT] SOCKS greeting rejected! VER=" << (quint8)data[0] << "METHOD=" << (quint8)data[1];
             socket->disconnectFromHost();
             return;
         }
 
-        qDebug() << "[CLIENT] Greeting OK: VER=" << (quint8)data[0]
-                 << "METHOD=" << (quint8)data[1] << "(Username/Password selected)";
+        qDebug() << "[CLIENT] Greeting OK: VER=" << (quint8)data[0] << "METHOD=" << (quint8)data[1] << "(Username/Password selected)";
 
         QByteArray auth;
         QByteArray user = "user";
@@ -132,10 +137,12 @@ void Client::onReadyRead()
         break;
     }
 
-    case ClientState::Auth: {
+    case ClientState::Auth:
+    {
         qDebug() << "[CLIENT] Received Auth Response:" << data.size() << "bytes";
 
-        if (data.size() != 2 || data[1] != char(0x00)) {
+        if (data.size() != 2 || data[1] != char(0x00))
+        {
             qCritical() << "[CLIENT] Authentication failed! STATUS=" << (quint8)data[1];
             socket->disconnectFromHost();
             return;
@@ -165,10 +172,12 @@ void Client::onReadyRead()
         break;
     }
 
-    case ClientState::Request: {
+    case ClientState::Request:
+    {
         qDebug() << "[CLIENT] Received CONNECT Response:" << data.size() << "bytes";
 
-        if (data.size() < 2 || data[1] != char(0x00)) {
+        if (data.size() < 2 || data[1] != char(0x00))
+        {
             qCritical() << "[CLIENT] CONNECT failed! REP=" << (quint8)data[1];
             socket->disconnectFromHost();
             return;
@@ -186,6 +195,7 @@ void Client::onReadyRead()
     }
 }
 
-void Client::onDisconnected() {
+void Client::onDisconnected()
+{
     qDebug() << "[CLIENT] Disconnected from proxy.";
 }

@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
     }
     else if (mode == "proxy") {
         qDebug() << "Starting PROXY...";
-        Proxy* proxy = new Proxy(54321, "127.0.0.1", 12345, &a);
+        Proxy* proxy = new Proxy(54321, &a);
         Q_UNUSED(proxy);
     }
     else if (mode == "client") {

@@ -16,6 +16,7 @@ add_executable(application_proxy
     server.h server.cpp
     proxy.h proxy.cpp
     client.h client.cpp
+    authenticate.h authenticate.cpp
 )
 
 target_link_libraries(application_proxy

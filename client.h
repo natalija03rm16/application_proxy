@@ -4,7 +4,8 @@
 #include <QtNetwork/QHostAddress>
 #include <QObject>
 
-enum class ClientState {
+enum class ClientState
+{
     Greeting,
     Auth,
     Request,

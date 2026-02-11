@@ -4,6 +4,13 @@
 #include <QtNetwork/QTcpSocket>
 #include <QObject>
 #include <QFile>
+#include <QMap>
+
+struct ServerClientContext
+{
+    QTcpSocket* socket;
+    QByteArray buffer;
+};
 
 class Server : public QObject
 {
@@ -18,10 +25,8 @@ private slots:
 
 private:
     QTcpServer* server;
-    QTcpSocket* clientSocket;
-    QFile* receivedFile;
+    QMap<QTcpSocket*, ServerClientContext> clients;
     int fileCounter;
-    QByteArray buffer;
 };
 
 #endif // SERVER_H

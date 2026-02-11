@@ -2,240 +2,285 @@
 #include <QDebug>
 #include <QByteArray>
 
-Proxy::Proxy(quint16 listenPort, const QString& serverHost_, quint16 serverPort_, QObject* parent)
-    : QObject(parent), clientSocket(nullptr), serverSocket(nullptr),
-    serverHost(serverHost_), serverPort(serverPort_), proxyState(ProxyState::Greeting)
+Proxy::Proxy(quint16 listenPort, QObject* parent) : QObject(parent)
 {
     tcpServer = new QTcpServer(this);
     connect(tcpServer, &QTcpServer::newConnection, this, &Proxy::onNewClientConnection);
 
-    if (!tcpServer->listen(QHostAddress::Any, listenPort)) {
+    if (!tcpServer->listen(QHostAddress::Any, listenPort))
         qCritical() << "[PROXY] Could not start!";
-    } else {
+    else
+    {
         qDebug() << "[PROXY] Listening on port" << listenPort;
+        qDebug() << "[PROXY] Maximum clients allowed:" << MAX_CLIENTS;
     }
 }
 
 void Proxy::onNewClientConnection()
 {
-    clientSocket = tcpServer->nextPendingConnection();
-    qDebug() << "[PROXY] Client connected:" << clientSocket->peerAddress().toString();
+    if (clients.size() >= MAX_CLIENTS)
+    {
+        QTcpSocket* tmp = tcpServer->nextPendingConnection();
+        qCritical() << "[PROXY] ========================================";
+        qCritical() << "[PROXY] Max clients reached (" << MAX_CLIENTS << "). Rejecting new connection.";
+        qCritical() << "[PROXY] Rejected client:" << tmp->peerAddress().toString();
+        qCritical() << "[PROXY] ========================================";
+        tmp->disconnectFromHost();
+        tmp->deleteLater();
+        return;
+    }
 
-    connect(clientSocket, &QTcpSocket::readyRead, this, &Proxy::onClientReadyRead);
-    connect(clientSocket, &QTcpSocket::disconnected, this, &Proxy::onClientDisconnected);
+    QTcpSocket* socket = tcpServer->nextPendingConnection();
 
-    // reset state - new client
-    proxyState = ProxyState::Greeting;
-    qDebug() << "[PROXY] Waiting for SOCKS5 Greeting...";
+    qDebug() << "[PROXY] ========================================";
+    qDebug() << "[PROXY] New client connected!";
+    qDebug() << "[PROXY] Client address:" << socket->peerAddress().toString();
+    qDebug() << "[PROXY] Client port:" << socket->peerPort();
+    qDebug() << "[PROXY] Total clients:" << (clients.size() + 1);
+    qDebug() << "[PROXY] ========================================";
+
+    ClientContext ctx;
+    ctx.clientSocket = socket;
+    ctx.serverSocket = nullptr;
+    ctx.state = ProxyState::Greeting;
+
+    clients.insert(socket, ctx);
+
+    connect(socket, &QTcpSocket::readyRead, this, &Proxy::onClientReadyRead);
+    connect(socket, &QTcpSocket::disconnected, this, &Proxy::onClientDisconnected);
+
+    qDebug() << "[PROXY] Waiting for SOCKS5 Greeting from" << socket->peerAddress().toString();
 }
 
 void Proxy::onClientReadyRead()
 {
-    QByteArray data = clientSocket->readAll();
+    QTcpSocket* socket = qobject_cast<QTcpSocket*>(sender());
 
-    switch (proxyState) {
-    case ProxyState::Greeting: {
-        qDebug() << "[PROXY] Received SOCKS5 Greeting:" << data.size() << "bytes";
-        qDebug() << "[PROXY] Greeting: VER=" << (quint8)data[0]
-                 << "NMETHODS=" << (quint8)data[1];
+    if (!clients.contains(socket))
+    {
+        qWarning() << "[PROXY] Received data from unknown client!";
+        return;
+    }
 
-        if (data.size() >= 3) {
-            qDebug() << "[PROXY] Client supports method:" << (quint8)data[2];
+    ClientContext& ctx = clients[socket];
+    QByteArray data = socket->readAll();
+
+    QString clientAddr = socket->peerAddress().toString();
+
+    switch (ctx.state) {
+    case ProxyState::Greeting:
+    {
+        qDebug() << "[PROXY] ----------------------------------------";
+        qDebug() << "[PROXY] Received SOCKS5 Greeting from" << clientAddr;
+        qDebug() << "[PROXY] Data size:" << data.size() << "bytes";
+
+        if (data.size() >= 2)
+        {
+            qDebug() << "[PROXY] VER:" << (quint8)data[0];
+            qDebug() << "[PROXY] NMETHODS:" << (quint8)data[1];
+            if (data.size() >= 3)
+                qDebug() << "[PROXY] METHOD:" << (quint8)data[2];
         }
-
-        QByteArray resp;
-        resp.append(char(0x05));
-        resp.append(char(0x02)); // username/password
 
         qDebug() << "[PROXY] Sending Greeting Response: VER=0x05, METHOD=0x02 (Username/Password)";
-        clientSocket->write(resp);
-        proxyState = ProxyState::Auth;
-        qDebug() << "[PROXY] Waiting for Authentication...";
+        socket->write(QByteArray("\x05\x02", 2));
+        ctx.state = ProxyState::Auth;
+        qDebug() << "[PROXY] State changed to: Auth";
+        qDebug() << "[PROXY] Waiting for Authentication from" << clientAddr;
+        qDebug() << "[PROXY] ----------------------------------------";
         break;
     }
 
-    case ProxyState::Auth: {
-        qDebug() << "[PROXY] Received Authentication:" << data.size() << "bytes";
+    case ProxyState::Auth:
+    {
+        qDebug() << "[PROXY] ----------------------------------------";
+        qDebug() << "[PROXY] Received Authentication from" << clientAddr;
+        qDebug() << "[PROXY] Data size:" << data.size() << "bytes";
 
-        if (data.size() < 3) {
-            qCritical() << "[PROXY] Invalid auth packet!";
-            clientSocket->disconnectFromHost();
-            return;
+        // parse username and password
+        if (data.size() >= 3) {
+            quint8 ulen = static_cast<quint8>(data[1]);
+            QString user = QString::fromUtf8(data.mid(2, ulen));
+
+            if (data.size() >= 3 + ulen)
+            {
+                quint8 plen = static_cast<quint8>(data[2 + ulen]);
+                QString pass = QString::fromUtf8(data.mid(3 + ulen, plen));
+
+                qDebug() << "[PROXY] Auth VER:" << (quint8)data[0];
+                qDebug() << "[PROXY] USERNAME:" << user;
+
+                if (user == "user" && pass == "pass") {
+                    qDebug() << "[PROXY] Authentication SUCCESS! STATUS=0x00";
+                    socket->write(QByteArray("\x01\x00", 2));
+                    ctx.state = ProxyState::Request;
+                    qDebug() << "[PROXY] State changed to: Request";
+                    qDebug() << "[PROXY] Waiting for CONNECT Request from" << clientAddr;
+                }
+                else
+                {
+                    qCritical() << "[PROXY] Authentication FAILED! Invalid credentials. STATUS=0x01";
+                    socket->write(QByteArray("\x01\x01", 2));
+                    socket->disconnectFromHost();
+                    qDebug() << "[PROXY] Disconnecting client due to failed auth";
+                }
+            }
+            else
+            {
+                qCritical() << "[PROXY] Invalid auth packet - missing password!";
+                socket->disconnectFromHost();
+            }
+        }
+        else
+        {
+            qCritical() << "[PROXY] Invalid auth packet - too short!";
+            socket->disconnectFromHost();
         }
 
-        quint8 ulen = static_cast<quint8>(data[1]);
-        QString user = QString::fromUtf8(data.mid(2, ulen));
-
-        if (data.size() < 3 + ulen) {
-            qCritical() << "[PROXY] Invalid auth packet - missing password!";
-            clientSocket->disconnectFromHost();
-            return;
-        }
-
-        quint8 plen = static_cast<quint8>(data[2 + ulen]);
-        QString pass = QString::fromUtf8(data.mid(3 + ulen, plen));
-
-        qDebug() << "[PROXY] Auth VER=" << (quint8)data[0]
-                 << "USERNAME=" << user;
-
-        QByteArray resp;
-        resp.append(char(0x01));
-
-        if (user == "user" && pass == "pass") {
-            resp.append(char(0x00));
-            qDebug() << "[PROXY] Authentication SUCCESS! STATUS=0x00";
-            proxyState = ProxyState::Request;
-            qDebug() << "[PROXY] Waiting for CONNECT Request...";
-        } else {
-            resp.append(char(0x01));
-            qCritical() << "[PROXY] Authentication FAILED! Invalid credentials. STATUS=0x01";
-            clientSocket->write(resp);
-            clientSocket->disconnectFromHost();
-            return;
-        }
-        clientSocket->write(resp);
+        qDebug() << "[PROXY] ----------------------------------------";
         break;
     }
 
-    case ProxyState::Request: {
+    case ProxyState::Request:
+    {
+        qDebug() << "[PROXY] ----------------------------------------";
+        qDebug() << "[PROXY] Received CONNECT Request from" << clientAddr;
+        qDebug() << "[PROXY] Data size:" << data.size() << "bytes";
 
-        if (data.size() < 10) {
-            qCritical() << "[PROXY] Invalid CONNECT request!";
-            clientSocket->disconnectFromHost();
-            return;
+        if (data.size() >= 4)
+        {
+            qDebug() << "[PROXY] VER:" << (quint8)data[0];
+            qDebug() << "[PROXY] CMD:" << (quint8)data[1];
+            qDebug() << "[PROXY] ATYP:" << (quint8)data[3];
         }
 
-        quint8 ver  = static_cast<quint8>(data[0]);
-        quint8 cmd  = static_cast<quint8>(data[1]);
-        quint8 atyp = static_cast<quint8>(data[3]);
+        QString dstAddress = "127.0.0.1";
+        quint16 dstPort = 12345;
 
-        if (ver != 0x05 || cmd != 0x01) {
-            qCritical() << "[PROXY] Unsupported request!";
-            clientSocket->disconnectFromHost();
-            return;
-        }
+        qDebug() << "[PROXY] Opening connection to server" << dstAddress << ":" << dstPort;
 
-        QString dstAddress;
-        quint16 dstPort;
+        ctx.serverSocket = new QTcpSocket(this);
+        connect(ctx.serverSocket, &QTcpSocket::readyRead, this, &Proxy::onServerReadyRead);
+        connect(ctx.serverSocket, &QTcpSocket::disconnected, this, &Proxy::onServerDisconnected);
 
-        int index = 4;
+        ctx.serverSocket->connectToHost(dstAddress, dstPort);
 
-        // ipv4
-        if (atyp == 0x01) {
-
-            quint32 ip =
-                (static_cast<quint8>(data[index]) << 24) |
-                (static_cast<quint8>(data[index+1]) << 16) |
-                (static_cast<quint8>(data[index+2]) << 8)  |
-                (static_cast<quint8>(data[index+3]));
-
-            QHostAddress addr(ip);
-            dstAddress = addr.toString();
-
-            index += 4;
-        }
-
-        // domain name
-        else if (atyp == 0x03) {
-
-            quint8 len = static_cast<quint8>(data[index]);
-            index += 1;
-
-            dstAddress = QString::fromUtf8(data.mid(index, len));
-            index += len;
-
-        }
-        else {
-            qCritical() << "[PROXY] Unsupported ATYP!";
-            clientSocket->disconnectFromHost();
-            return;
-        }
-
-        // port
-        dstPort = (static_cast<quint8>(data[index]) << 8) |
-                  static_cast<quint8>(data[index+1]);
-
-        qDebug() << "[PROXY] CONNECT to:" << dstAddress << ":" << dstPort;
-
-        // real connection to requested host
-        serverSocket = new QTcpSocket(this);
-        connect(serverSocket, &QTcpSocket::readyRead, this, &Proxy::onServerReadyRead);
-        connect(serverSocket, &QTcpSocket::disconnected, this, &Proxy::onServerDisconnected);
-
-        serverSocket->connectToHost(dstAddress, dstPort);
-
-        if (!serverSocket->waitForConnected(3000)) {
-            qCritical() << "[PROXY] Failed to connect to destination!";
-
-            QByteArray failResp;
-            failResp.append(char(0x05));
-            failResp.append(char(0x05)); // connection refused
-            failResp.append(char(0x00));
-            failResp.append(char(0x01));
-            failResp.append(QByteArray(6, char(0x00)));
-
-            clientSocket->write(failResp);
-            clientSocket->disconnectFromHost();
-            return;
-        }
-
-        // succes resp
         QByteArray resp;
-        resp.append(char(0x05));
-        resp.append(char(0x00)); // success
-        resp.append(char(0x00));
-        resp.append(char(0x01));
-        resp.append(QByteArray(6, char(0x00)));
+        resp.append(char(0x05));  // VER
+        resp.append(char(0x00));  // REP = success
+        resp.append(char(0x00));  // RSV
+        resp.append(char(0x01));  // ATYP = IPv4
+        resp.append(QByteArray(6, char(0x00)));  // BND.ADDR + BND.PORT
 
-        clientSocket->write(resp);
+        qDebug() << "[PROXY] Sending CONNECT Response: REP=0x00 (Success)";
+        socket->write(resp);
 
-        proxyState = ProxyState::Relay;
-        qDebug() << "[PROXY] Tunnel established - RELAY mode";
-
+        ctx.state = ProxyState::Relay;
+        qDebug() << "[PROXY] State changed to: Relay";
+        qDebug() << "[PROXY] *** Entering RELAY mode for" << clientAddr << "***";
+        qDebug() << "[PROXY] ----------------------------------------";
         break;
     }
 
     case ProxyState::Relay:
-        qDebug() << "[PROXY] [RELAY] Client -> Server:" << data.size() << "bytes";
-        if (serverSocket)
-            serverSocket->write(data);
+    {
+        qDebug() << "[PROXY] [RELAY] Client -> Server:" << data.size() << "bytes from" << clientAddr;
+
+        if (ctx.serverSocket && ctx.serverSocket->state() == QTcpSocket::ConnectedState)
+        {
+            ctx.serverSocket->write(data);
+            qDebug() << "[PROXY] [RELAY] Data forwarded to server";
+        }
+        else
+            qWarning() << "[PROXY] [RELAY] Server socket not connected! Cannot forward data.";
+
         break;
+    }
     }
 }
 
 void Proxy::onServerReadyRead()
 {
-    QByteArray data = serverSocket->readAll();
-    qDebug() << "[PROXY] [RELAY] Server -> Client:" << data.size() << "bytes";
+    QTcpSocket* server = qobject_cast<QTcpSocket*>(sender());
 
-    if (clientSocket && clientSocket->state() == QTcpSocket::ConnectedState)
-        clientSocket->write(data);
+    for (auto it = clients.begin(); it != clients.end(); ++it)
+    {
+        if (it->serverSocket == server)
+        {
+            QByteArray data = server->readAll();
+
+            QString clientAddr = it->clientSocket->peerAddress().toString();
+            qDebug() << "[PROXY] [RELAY] Server -> Client:" << data.size() << "bytes to" << clientAddr;
+
+            if (it->clientSocket && it->clientSocket->state() == QTcpSocket::ConnectedState)
+            {
+                it->clientSocket->write(data);
+                qDebug() << "[PROXY] [RELAY] Data forwarded to client";
+            }
+            else
+                qWarning() << "[PROXY] [RELAY] Client socket not connected! Cannot forward data.";
+
+            break;
+        }
+    }
 }
 
 void Proxy::onClientDisconnected()
 {
-    qDebug() << "[PROXY] Client disconnected";
+    QTcpSocket* socket = qobject_cast<QTcpSocket*>(sender());
 
-    if (clientSocket) {
-        clientSocket->deleteLater();
-        clientSocket = nullptr;
+    if (!clients.contains(socket))
+    {
+        qWarning() << "[PROXY] Unknown client disconnected!";
+        return;
     }
 
-    proxyState = ProxyState::Greeting;
-    qDebug() << "[PROXY] Client socket cleaned up. Server connection still active.";
-}
+    QString clientAddr = socket->peerAddress().toString();
 
+    qDebug() << "[PROXY] ========================================";
+    qDebug() << "[PROXY] Client disconnected:" << clientAddr;
+    qDebug() << "[PROXY] Cleaning up connections...";
+
+    ClientContext ctx = clients.take(socket);
+
+    if (ctx.serverSocket)
+    {
+        qDebug() << "[PROXY] Closing server connection...";
+        ctx.serverSocket->disconnect();
+        ctx.serverSocket->disconnectFromHost();
+        ctx.serverSocket->deleteLater();
+    }
+
+    socket->disconnect();
+    socket->deleteLater();
+
+    qDebug() << "[PROXY] Total clients remaining:" << clients.size();
+    qDebug() << "[PROXY] ========================================";
+}
 
 void Proxy::onServerDisconnected()
 {
+    QTcpSocket* server = qobject_cast<QTcpSocket*>(sender());
+
+    qDebug() << "[PROXY] ========================================";
     qDebug() << "[PROXY] Server disconnected";
 
-    if (serverSocket) {
-        serverSocket->deleteLater();
-        serverSocket = nullptr;
+    for (auto it = clients.begin(); it != clients.end(); ++it)
+    {
+        if (it.value().serverSocket == server)
+        {
+            QString clientAddr = it.value().clientSocket->peerAddress().toString();
+            qDebug() << "[PROXY] Server disconnected for client:" << clientAddr;
+            qDebug() << "[PROXY] Cleaning up server socket...";
+
+            server->disconnect();
+            server->deleteLater();
+            it.value().serverSocket = nullptr;
+
+            qDebug() << "[PROXY] Server socket cleaned up. Client connection still active.";
+            break;
+        }
     }
 
-    proxyState = ProxyState::Greeting;
-    qDebug() << "[PROXY] Server socket cleaned up. Client connection still active.";
+    qDebug() << "[PROXY] ========================================";
 }
-
