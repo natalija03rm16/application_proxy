@@ -1,9 +1,9 @@
 #ifndef SERVER_H
 #define SERVER_H
-
 #include <QtNetwork/QTcpServer>
 #include <QtNetwork/QTcpSocket>
 #include <QObject>
+#include <QFile>
 
 class Server : public QObject
 {
@@ -19,6 +19,9 @@ private slots:
 private:
     QTcpServer* server;
     QTcpSocket* clientSocket;
+    QFile* receivedFile;
+    int fileCounter;
+    QByteArray buffer;
 };
 
-#endif
+#endif // SERVER_H

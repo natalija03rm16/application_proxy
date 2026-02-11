@@ -57,7 +57,6 @@ void Proxy::onClientReadyRead()
     case ProxyState::Auth: {
         qDebug() << "[PROXY] Received Authentication:" << data.size() << "bytes";
 
-        // Parse username and password
         if (data.size() < 3) {
             qCritical() << "[PROXY] Invalid auth packet!";
             clientSocket->disconnectFromHost();
@@ -77,7 +76,7 @@ void Proxy::onClientReadyRead()
         QString pass = QString::fromUtf8(data.mid(3 + ulen, plen));
 
         qDebug() << "[PROXY] Auth VER=" << (quint8)data[0]
-                 << "USERNAME=" << user << "PASSWORD=" << pass;
+                 << "USERNAME=" << user;
 
         QByteArray resp;
         resp.append(char(0x01));
@@ -159,27 +158,27 @@ void Proxy::onServerReadyRead()
 void Proxy::onClientDisconnected()
 {
     qDebug() << "[PROXY] Client disconnected";
-    if (serverSocket) {
-        qDebug() << "[PROXY] Closing server connection...";
-        serverSocket->disconnectFromHost();
-        serverSocket->deleteLater();
-        serverSocket = nullptr;
+
+    if (clientSocket) {
+        clientSocket->deleteLater();
+        clientSocket = nullptr;
     }
-    clientSocket->deleteLater();
-    clientSocket = nullptr;
+
     proxyState = ProxyState::Greeting;
+    qDebug() << "[PROXY] Client socket cleaned up. Server connection still active.";
 }
+
 
 void Proxy::onServerDisconnected()
 {
     qDebug() << "[PROXY] Server disconnected";
-    if (clientSocket) {
-        qDebug() << "[PROXY] Closing client connection...";
-        clientSocket->disconnectFromHost();
-        clientSocket->deleteLater();
-        clientSocket = nullptr;
+
+    if (serverSocket) {
+        serverSocket->deleteLater();
+        serverSocket = nullptr;
     }
-    serverSocket->deleteLater();
-    serverSocket = nullptr;
+
     proxyState = ProxyState::Greeting;
+    qDebug() << "[PROXY] Server socket cleaned up. Client connection still active.";
 }
+

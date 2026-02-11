@@ -8,9 +8,11 @@
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
-    QStringList args = a.arguments();
+    QStringList args;
 
-    if (args.size() < 2) {
+    if (argc > 1) {
+        args = QStringList(argv + 1, argv + argc);
+    } else {
         qCritical() << "Usage:";
         qCritical() << "  ./application_proxy server";
         qCritical() << "  ./application_proxy proxy";
@@ -18,31 +20,36 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    QString mode = args.at(1);
+    QString mode = args.at(0);
 
     if (mode == "server") {
         qDebug() << "Starting SERVER...";
-        Server server(12345);
-        return a.exec();
+        Server* server = new Server(12345, &a);
+        Q_UNUSED(server);
     }
-
-    if (mode == "proxy") {
+    else if (mode == "proxy") {
         qDebug() << "Starting PROXY...";
-        Proxy proxy(54321, "127.0.0.1", 12345);
-        return a.exec();
+        Proxy* proxy = new Proxy(54321, "127.0.0.1", 12345, &a);
+        Q_UNUSED(proxy);
     }
-
-    if (mode == "client") {
+    else if (mode == "client") {
         qDebug() << "Starting CLIENT...";
-        Client client("127.0.0.1", 54321);
+        Client* client = new Client("127.0.0.1", 54321, &a);
 
-        QTimer::singleShot(1000, [&client]() {
-            client.sendMessage("Hello through proxy!");
+        QTimer::singleShot(1000, [client]() {
+            client->sendMessage("Hello through proxy!");
         });
 
-        return a.exec();
+        QTimer::singleShot(2000, [client]() {
+            client->askAndSendFile();
+        });
+
+        Q_UNUSED(client);
+    }
+    else {
+        qCritical() << "Unknown mode:" << mode;
+        return -1;
     }
 
-    qCritical() << "Unknown mode:" << mode;
-    return -1;
+    return a.exec();
 }

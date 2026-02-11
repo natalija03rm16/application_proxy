@@ -2,6 +2,9 @@
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QDebug>
+#include <QFile>
+#include <QFileInfo>
+#include <QFileDialog>
 
 Client::Client(const QString& proxyHost, quint16 proxyPort, QObject* parent)
     : QObject(parent), clientState(ClientState::Greeting)
@@ -40,9 +43,59 @@ void Client::onConnected()
     socket->write(greeting);
 }
 
-void Client::sendMessage(const QString& message) {
-    if (socket->state() == QTcpSocket::ConnectedState)
-        socket->write(message.toUtf8());
+void Client::sendMessage(const QString& message)
+{
+    if (!socket || socket->state() != QTcpSocket::ConnectedState) {
+        qCritical() << "[CLIENT] Cannot send message: not connected";
+        return;
+    }
+
+    // Protokol: MSG|<dužina>|<poruka>
+    QByteArray packet;
+    packet.append("MSG|");
+
+    QByteArray msgData = message.toUtf8();
+    packet.append(QString::number(msgData.size()).toUtf8());
+    packet.append("|");
+    packet.append(msgData);
+
+    qDebug() << "[CLIENT] Sending message:" << message;
+    socket->write(packet);
+    socket->flush();
+}
+
+void Client::askAndSendFile()
+{
+    while (true) {
+        QString filePath = QInputDialog::getText(nullptr, "Send File", "Enter path to file (or leave empty to quit):");
+        if (filePath.isEmpty()) {
+            qDebug() << "[CLIENT] No file entered. You can continue sending messages or files later.";
+            break;
+        }
+
+        QFile file(filePath);
+        if (!file.open(QIODevice::ReadOnly)) {
+            qCritical() << "[CLIENT] Cannot open file:" << filePath;
+            continue;
+        }
+
+        QFileInfo fileInfo(filePath);
+        QByteArray fileData = file.readAll();
+        file.close();
+
+        QByteArray packet;
+        packet.append("FILE|");
+        packet.append(fileInfo.fileName().toUtf8());
+        packet.append("|");
+        packet.append(QString::number(fileData.size()).toUtf8());
+        packet.append("|");
+        packet.append(fileData);
+
+        socket->write(packet);
+        socket->flush();
+
+        qDebug() << "[CLIENT] File sent:" << fileInfo.fileName() << ", size:" << fileData.size() << "bytes";
+    }
 }
 
 void Client::onReadyRead()
@@ -73,7 +126,7 @@ void Client::onReadyRead()
         auth.append(char(pass.size()));         // PLEN
         auth.append(pass);
 
-        qDebug() << "[CLIENT] Sending Authentication: USERNAME=" << user << "PASSWORD=" << pass;
+        qDebug() << "[CLIENT] Sending Authentication: USERNAME=" << user;
         socket->write(auth);
         clientState = ClientState::Auth;
         break;

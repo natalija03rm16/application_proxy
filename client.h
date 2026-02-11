@@ -18,6 +18,7 @@ public:
     Client(const QString& proxyHost, quint16 proxyPort, QObject* parent = nullptr);
     ~Client();
     void sendMessage(const QString& message);
+    void askAndSendFile();
 
 private slots:
     void onConnected();
