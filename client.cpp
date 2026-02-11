@@ -50,7 +50,7 @@ void Client::sendMessage(const QString& message)
         return;
     }
 
-    // Protokol: MSG|<dužina>|<poruka>
+    // Protokol: MSG|<len>|<message>
     QByteArray packet;
     packet.append("MSG|");
 
@@ -156,10 +156,10 @@ void Client::onReadyRead()
         req.append(char(ip >> 8));
         req.append(char(ip));
 
-        req.append(char(0x1F)); // port 8080 (0x1F90)
-        req.append(char(0x90));
+        req.append(char(0x30));
+        req.append(char(0x39));
 
-        qDebug() << "[CLIENT] Sending CONNECT Request: DST.ADDR=127.0.0.1 DST.PORT=8080";
+        qDebug() << "[CLIENT] Sending CONNECT Request...";
         socket->write(req);
         clientState = ClientState::Request;
         break;

@@ -24,7 +24,7 @@ void Proxy::onNewClientConnection()
     connect(clientSocket, &QTcpSocket::readyRead, this, &Proxy::onClientReadyRead);
     connect(clientSocket, &QTcpSocket::disconnected, this, &Proxy::onClientDisconnected);
 
-    // Reset state za novog klijenta
+    // reset state - new client
     proxyState = ProxyState::Greeting;
     qDebug() << "[PROXY] Waiting for SOCKS5 Greeting...";
 }
@@ -98,31 +98,88 @@ void Proxy::onClientReadyRead()
     }
 
     case ProxyState::Request: {
-        qDebug() << "[PROXY] Received CONNECT Request:" << data.size() << "bytes";
 
-        if (data.size() < 4) {
+        if (data.size() < 10) {
             qCritical() << "[PROXY] Invalid CONNECT request!";
             clientSocket->disconnectFromHost();
             return;
         }
 
-        qDebug() << "[PROXY] Request: VER=" << (quint8)data[0]
-                 << "CMD=" << (quint8)data[1]
-                 << "ATYP=" << (quint8)data[3];
+        quint8 ver  = static_cast<quint8>(data[0]);
+        quint8 cmd  = static_cast<quint8>(data[1]);
+        quint8 atyp = static_cast<quint8>(data[3]);
 
-        if (data[1] != char(0x01)) {
-            qCritical() << "[PROXY] Unsupported command:" << (quint8)data[1];
+        if (ver != 0x05 || cmd != 0x01) {
+            qCritical() << "[PROXY] Unsupported request!";
             clientSocket->disconnectFromHost();
             return;
         }
 
-        qDebug() << "[PROXY] Opening connection to server" << serverHost << ":" << serverPort;
+        QString dstAddress;
+        quint16 dstPort;
 
+        int index = 4;
+
+        // ipv4
+        if (atyp == 0x01) {
+
+            quint32 ip =
+                (static_cast<quint8>(data[index]) << 24) |
+                (static_cast<quint8>(data[index+1]) << 16) |
+                (static_cast<quint8>(data[index+2]) << 8)  |
+                (static_cast<quint8>(data[index+3]));
+
+            QHostAddress addr(ip);
+            dstAddress = addr.toString();
+
+            index += 4;
+        }
+
+        // domain name
+        else if (atyp == 0x03) {
+
+            quint8 len = static_cast<quint8>(data[index]);
+            index += 1;
+
+            dstAddress = QString::fromUtf8(data.mid(index, len));
+            index += len;
+
+        }
+        else {
+            qCritical() << "[PROXY] Unsupported ATYP!";
+            clientSocket->disconnectFromHost();
+            return;
+        }
+
+        // port
+        dstPort = (static_cast<quint8>(data[index]) << 8) |
+                  static_cast<quint8>(data[index+1]);
+
+        qDebug() << "[PROXY] CONNECT to:" << dstAddress << ":" << dstPort;
+
+        // real connection to requested host
         serverSocket = new QTcpSocket(this);
         connect(serverSocket, &QTcpSocket::readyRead, this, &Proxy::onServerReadyRead);
         connect(serverSocket, &QTcpSocket::disconnected, this, &Proxy::onServerDisconnected);
-        serverSocket->connectToHost(serverHost, serverPort);
 
+        serverSocket->connectToHost(dstAddress, dstPort);
+
+        if (!serverSocket->waitForConnected(3000)) {
+            qCritical() << "[PROXY] Failed to connect to destination!";
+
+            QByteArray failResp;
+            failResp.append(char(0x05));
+            failResp.append(char(0x05)); // connection refused
+            failResp.append(char(0x00));
+            failResp.append(char(0x01));
+            failResp.append(QByteArray(6, char(0x00)));
+
+            clientSocket->write(failResp);
+            clientSocket->disconnectFromHost();
+            return;
+        }
+
+        // succes resp
         QByteArray resp;
         resp.append(char(0x05));
         resp.append(char(0x00)); // success
@@ -130,11 +187,11 @@ void Proxy::onClientReadyRead()
         resp.append(char(0x01));
         resp.append(QByteArray(6, char(0x00)));
 
-        qDebug() << "[PROXY] Sending CONNECT Response: REP=0x00 (Success)";
         clientSocket->write(resp);
 
         proxyState = ProxyState::Relay;
-        qDebug() << "[PROXY] *** Entering RELAY mode - Transparent forwarding active ***";
+        qDebug() << "[PROXY] Tunnel established - RELAY mode";
+
         break;
     }
 
