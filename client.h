@@ -15,6 +15,7 @@ enum class ClientState
 class Client : public QObject
 {
     Q_OBJECT
+
 public:
     Client(const QString& proxyHost, quint16 proxyPort, QObject* parent = nullptr);
     ~Client();

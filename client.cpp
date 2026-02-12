@@ -146,7 +146,6 @@ void Client::onReadyRead()
         {
             qCritical() << "[CLIENT] Authentication failed! STATUS=" << (quint8)data[1];
             socket->disconnectFromHost();
-            clientState = ClientState::Auth;
             return;
         }
 
