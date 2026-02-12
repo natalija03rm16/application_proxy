@@ -2,10 +2,7 @@
 #include <QFile>
 #include <QTextStream>
 
-Authenticate::Authenticate(const QString& filePath)
-    : m_filePath(filePath)
-{
-}
+Authenticate::Authenticate() {}
 
 QString Authenticate::hashPassword(const QString& password)
 {
@@ -19,7 +16,7 @@ QString Authenticate::hashPassword(const QString& password)
 
 bool Authenticate::login(const QString& username, const QString& password)
 {
-    QFile file("/home/natalija/Desktop/mrkirm/application_proxy/login_info/uname_pass.txt");
+    QFile file("/home/natalija/Desktop/mrkirm/application_proxy/login_info/pairs.txt");
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
         return false;
 
@@ -36,9 +33,7 @@ bool Authenticate::login(const QString& username, const QString& password)
             QString filePassword = parts[1];
 
             if (fileUsername == username && filePassword == hashedInput)
-            {
                 return true;
-            }
         }
     }
 

@@ -1,4 +1,5 @@
 #include "proxy.h"
+#include "authenticate.h"
 #include <QDebug>
 #include <QByteArray>
 
@@ -110,7 +111,10 @@ void Proxy::onClientReadyRead()
                 qDebug() << "[PROXY] Auth VER:" << (quint8)data[0];
                 qDebug() << "[PROXY] USERNAME:" << user;
 
-                if (user == "user" && pass == "pass") {
+                Authenticate auth;
+
+                if (auth.login(user, pass))
+                {
                     qDebug() << "[PROXY] Authentication SUCCESS! STATUS=0x00";
                     socket->write(QByteArray("\x01\x00", 2));
                     ctx.state = ProxyState::Request;
@@ -184,7 +188,8 @@ void Proxy::onClientReadyRead()
 
     case ProxyState::Relay:
     {
-        qDebug() << "[PROXY] [RELAY] Client -> Server:" << data.size() << "bytes from" << clientAddr;
+        QString clientInfo = clientAddr + ":" + QString::number(socket->peerPort());
+        qDebug() << "[PROXY] [RELAY] Client -> Server:" << data.size() << "bytes from" << clientInfo;
 
         if (ctx.serverSocket && ctx.serverSocket->state() == QTcpSocket::ConnectedState)
         {
@@ -210,7 +215,9 @@ void Proxy::onServerReadyRead()
             QByteArray data = server->readAll();
 
             QString clientAddr = it->clientSocket->peerAddress().toString();
-            qDebug() << "[PROXY] [RELAY] Server -> Client:" << data.size() << "bytes to" << clientAddr;
+            QString clientInfo = clientAddr + ":" + QString::number(it->clientSocket->peerPort());
+
+            qDebug() << "[PROXY] [RELAY] Server -> Client:" << data.size() << "bytes to" << clientInfo;
 
             if (it->clientSocket && it->clientSocket->state() == QTcpSocket::ConnectedState)
             {
@@ -238,7 +245,7 @@ void Proxy::onClientDisconnected()
     QString clientAddr = socket->peerAddress().toString();
 
     qDebug() << "[PROXY] ========================================";
-    qDebug() << "[PROXY] Client disconnected:" << clientAddr;
+    qDebug() << "[PROXY] Client disconnected:" << clientAddr + ":" + QString::number(socket->peerPort());
     qDebug() << "[PROXY] Cleaning up connections...";
 
     ClientContext ctx = clients.take(socket);

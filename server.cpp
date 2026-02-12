@@ -56,7 +56,9 @@ void Server::onReadyRead()
     // add data to client buffer
     ctx.buffer.append(clientSocket->readAll());
 
-    qDebug() << "[SERVER] Received data from" << clientSocket->peerAddress().toString() << "- buffer size:" << ctx.buffer.size() << "bytes";
+    QString clientAddr = clientSocket->peerAddress().toString();
+    QString clientInf = clientAddr + ":" + QString::number(clientSocket->peerPort());
+    qDebug() << "[SERVER] Received data from" << clientInf << "- buffer size:" << ctx.buffer.size() << "bytes";
 
     // parse buffer data
     while (true) {
@@ -79,9 +81,8 @@ void Server::onReadyRead()
 
             // extract message
             QByteArray message = ctx.buffer.mid(secondPipe + 1, msgLen);
-
             qDebug() << "[SERVER] ----------------------------------------";
-            qDebug() << "[SERVER] Received MESSAGE from" << clientSocket->peerAddress().toString();
+            qDebug() << "[SERVER] Received MESSAGE from" << clientSocket->peerAddress().toString() + ":" + QString::number(clientSocket->peerPort());
             qDebug() << "[SERVER]   Size:" << msgLen << "bytes";
             qDebug() << "[SERVER]   Content:" << message;
             qDebug() << "[SERVER] ----------------------------------------";
@@ -169,7 +170,7 @@ void Server::onDisconnected()
     }
 
     qDebug() << "[SERVER] ========================================";
-    qDebug() << "[SERVER] Client disconnected:" << clientSocket->peerAddress().toString();
+    qDebug() << "[SERVER] Client disconnected:" << clientSocket->peerAddress().toString() + ":" + QString::number(clientSocket->peerPort());
     qDebug() << "[SERVER] Cleaning up connection...";
     qDebug() << "[SERVER] ========================================";
 

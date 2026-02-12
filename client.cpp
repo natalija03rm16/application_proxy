@@ -8,8 +8,8 @@
 
 Client::Client(const QString& proxyHost, quint16 proxyPort, QObject* parent) : QObject(parent), clientState(ClientState::Greeting)
 {
-    QString username = QInputDialog::getText(nullptr, "Login", "Username:");
-    QString password = QInputDialog::getText(nullptr, "Login", "Password:", QLineEdit::Password);
+    this->username = QInputDialog::getText(nullptr, "Login", "Username:").trimmed();
+    this->password = QInputDialog::getText(nullptr, "Login", "Password:", QLineEdit::Password).trimmed();
 
     socket = new QTcpSocket(this);
     connect(socket, &QTcpSocket::connected, this, &Client::onConnected);
@@ -122,8 +122,8 @@ void Client::onReadyRead()
         qDebug() << "[CLIENT] Greeting OK: VER=" << (quint8)data[0] << "METHOD=" << (quint8)data[1] << "(Username/Password selected)";
 
         QByteArray auth;
-        QByteArray user = "user";
-        QByteArray pass = "pass";
+        QByteArray user = username.toUtf8();
+        QByteArray pass = password.toUtf8();
 
         auth.append(char(0x01));                // auth version
         auth.append(char(user.size()));         // ULEN
@@ -145,11 +145,11 @@ void Client::onReadyRead()
         {
             qCritical() << "[CLIENT] Authentication failed! STATUS=" << (quint8)data[1];
             socket->disconnectFromHost();
+            clientState = ClientState::Auth;
             return;
         }
 
-        qDebug() << "[CLIENT] Authentication OK: VER=" << (quint8)data[0]
-                 << "STATUS=" << (quint8)data[1] << "(Success)";
+        qDebug() << "[CLIENT] Authentication OK: VER=" << (quint8)data[0] << "STATUS=" << (quint8)data[1] << "(Success)";
 
         QByteArray req;
         req.append(char(0x05)); // VER
@@ -183,8 +183,8 @@ void Client::onReadyRead()
             return;
         }
 
-        qDebug() << "[CLIENT] CONNECT OK: REP=" << (quint8)data[1] << "(Success)";
-        qDebug() << "[CLIENT] *** SOCKS5 tunnel established - Entering RELAY mode ***";
+        qDebug() << "[CLIENT] CONNECT OK. Tunnel established.";
+
         clientState = ClientState::Relay;
         break;
     }

@@ -6,13 +6,11 @@
 class Authenticate
 {
 public:
-    Authenticate(const QString& filePath);
+    Authenticate();
 
     bool login(const QString& username, const QString& password);
 
 private:
-    QString m_filePath;
-
     QString hashPassword(const QString& password);
 };
 

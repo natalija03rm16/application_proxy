@@ -29,6 +29,8 @@ private slots:
 private:
     QTcpSocket* socket;
     ClientState clientState;
+    QString username;
+    QString password;
 };
 
 #endif // CLIENT_H

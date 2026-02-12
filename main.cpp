@@ -10,9 +10,10 @@ int main(int argc, char *argv[])
     QApplication a(argc, argv);
     QStringList args;
 
-    if (argc > 1) {
+    if (argc > 1)
         args = QStringList(argv + 1, argv + argc);
-    } else {
+    else
+    {
         qCritical() << "Usage:";
         qCritical() << "  ./application_proxy server";
         qCritical() << "  ./application_proxy proxy";
@@ -22,31 +23,28 @@ int main(int argc, char *argv[])
 
     QString mode = args.at(0);
 
-    if (mode == "server") {
+    if (mode == "server")
+    {
         qDebug() << "Starting SERVER...";
         Server* server = new Server(12345, &a);
         Q_UNUSED(server);
     }
-    else if (mode == "proxy") {
+    else if (mode == "proxy")
+    {
         qDebug() << "Starting PROXY...";
         Proxy* proxy = new Proxy(54321, &a);
         Q_UNUSED(proxy);
     }
-    else if (mode == "client") {
+    else if (mode == "client")
+    {
         qDebug() << "Starting CLIENT...";
         Client* client = new Client("127.0.0.1", 54321, &a);
-
-        QTimer::singleShot(1000, [client]() {
-            client->sendMessage("Hello through proxy!");
-        });
-
-        QTimer::singleShot(2000, [client]() {
-            client->askAndSendFile();
-        });
-
+        QTimer::singleShot(1000, [client]() {client->sendMessage("Hello through proxy!");});
+        QTimer::singleShot(2000, [client]() {client->askAndSendFile();});
         Q_UNUSED(client);
     }
-    else {
+    else
+    {
         qCritical() << "Unknown mode:" << mode;
         return -1;
     }
