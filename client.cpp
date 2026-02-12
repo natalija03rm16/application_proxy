@@ -5,6 +5,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QFileDialog>
+#include <QCoreApplication>
 
 Client::Client(const QString& proxyHost, quint16 proxyPort, QObject* parent) : QObject(parent), clientState(ClientState::Greeting)
 {
@@ -198,4 +199,5 @@ void Client::onReadyRead()
 void Client::onDisconnected()
 {
     qDebug() << "[CLIENT] Disconnected from proxy.";
+    QCoreApplication::quit();
 }
